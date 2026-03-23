@@ -18,16 +18,19 @@ npm install @justinmcadoo/tendiocentral-sdk
 
 Set the following environment variables in your application:
 
-| Variable | Required | Description |
-|---|---|---|
-| `TENDIOCENTRAL_CLIENT_ID` | Yes | Your app's client ID (auto-read by the SDK) |
-| `TENDIOCENTRAL_CLIENT_SECRET` | Yes | Your app's client secret |
-| `TENDIOCENTRAL_URL` | Yes | TendioCentral server URL (auto-read by the SDK if not passed in config) |
-| `TENDIOCENTRAL_WEBHOOK_SECRET` | No | Secret for verifying webhook payloads |
-| `ENVIRONMENT` | No | `development`, `staging`, or `production` (defaults to `production`) |
-| `SESSION_SECRET` | Yes | Secret for express-session |
+| Variable | Required | Auto-read by SDK | Description |
+|---|---|---|---|
+| `TENDIOCENTRAL_CLIENT_ID` | Yes | Yes | Your app's client ID |
+| `TENDIOCENTRAL_CLIENT_SECRET` | Yes | No | Your app's client secret — must be passed as `clientSecret` in config |
+| `TENDIOCENTRAL_URL` | Yes | Yes | TendioCentral server URL |
+| `TENDIOCENTRAL_REDIRECT_URI` | Yes | No | The OAuth callback URL — must be passed as `redirectUri` in config |
+| `TENDIOCENTRAL_WEBHOOK_SECRET` | No | Yes | Secret for verifying webhook payloads |
+| `ENVIRONMENT` | No | No | `development`, `staging`, or `production` (defaults to `production`) — pass as `environment` in config |
+| `SESSION_SECRET` | Yes | No | Secret for express-session (not SDK-related, used by your session middleware) |
 
-**Important:** `TENDIOCENTRAL_CLIENT_ID` and `TENDIOCENTRAL_URL` are automatically read from `process.env` by the SDK. You only need to pass `clientSecret`, `redirectUri`, and optionally `webhookSecret` and `environment` in the config object.
+**Auto-read variables:** `TENDIOCENTRAL_CLIENT_ID`, `TENDIOCENTRAL_URL`, and `TENDIOCENTRAL_WEBHOOK_SECRET` are automatically read from `process.env` by the SDK — you do not need to pass them in the config object (though you can override them if needed).
+
+**Manually passed variables:** `TENDIOCENTRAL_CLIENT_SECRET` and `TENDIOCENTRAL_REDIRECT_URI` must be read from `process.env` by your code and passed explicitly in the config as `clientSecret` and `redirectUri`.
 
 ---
 
