@@ -265,7 +265,8 @@ export type TendioAuthErrorCode =
   | 'insufficient_location'
   | 'caregivers_not_allowed'
   | 'credentials_login_disabled'
-  | 'uri_registration_failed';
+  | 'uri_registration_failed'
+  | 'session_error';
 
 export class TendioAuthError extends Error {
   readonly code: TendioAuthErrorCode;

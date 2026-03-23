@@ -36,6 +36,28 @@ function getSession(req: Request): SessionData {
   return session;
 }
 
+function saveSession(session: SessionData): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const s = session as SessionData & { save?: (cb: (err?: Error) => void) => void };
+    if (typeof s.save !== 'function') {
+      resolve();
+      return;
+    }
+    s.save((err?: Error) => {
+      if (err) {
+        reject(
+          new TendioAuthError(
+            'session_error',
+            `Failed to persist session: ${err.message}`,
+          ),
+        );
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
 export class TendioExpressAuth<TRoles extends string = string> {
   private readonly auth: TendioAuth<TRoles>;
 
@@ -51,25 +73,30 @@ export class TendioExpressAuth<TRoles extends string = string> {
   }
 
   initiateLogin(options?: InitiateLoginOptions): RequestHandler {
-    return (req: Request, res: Response, _next: NextFunction): void => {
-      const session = getSession(req);
-      const { verifier, challenge, state } = this.auth.generatePKCE();
+    return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+      try {
+        const session = getSession(req);
+        const { verifier, challenge, state } = this.auth.generatePKCE();
 
-      const oauthKey = `${this.auth.sessionKey}__oauth`;
-      session[oauthKey] = {
-        codeVerifier: verifier,
-        state,
-        returnTo: (req.query as Record<string, string>).returnTo || '/',
-      };
+        const oauthKey = `${this.auth.sessionKey}__oauth`;
+        session[oauthKey] = {
+          codeVerifier: verifier,
+          state,
+          returnTo: (req.query as Record<string, string>).returnTo || '/',
+        };
 
-      const theme = (req.query as Record<string, string>).theme;
-      const url = this.auth.getAuthorizeUrl(state, challenge, {
-        prompt: options?.prompt,
-        loginHint: options?.loginHint,
-        theme,
-      });
+        const theme = (req.query as Record<string, string>).theme;
+        const url = this.auth.getAuthorizeUrl(state, challenge, {
+          prompt: options?.prompt,
+          loginHint: options?.loginHint,
+          theme,
+        });
 
-      res.redirect(url);
+        await saveSession(session);
+        res.redirect(url);
+      } catch (err) {
+        next(err);
+      }
     };
   }
 
@@ -141,6 +168,7 @@ export class TendioExpressAuth<TRoles extends string = string> {
         req.tendioUser = user as TendioUser;
         req.tendioTokens = tokens;
 
+        await saveSession(session);
         next();
       } catch (err) {
         next(err);
@@ -303,10 +331,12 @@ export class TendioExpressAuth<TRoles extends string = string> {
           await this.auth.onBeforeLogout(req, res);
         }
 
-        if (session) {
-          delete session[this.auth.sessionKey];
-          delete session[`${this.auth.sessionKey}__tokens`];
-          delete session[`${this.auth.sessionKey}__oauth`];
+        const currentSession = (req as unknown as { session?: SessionData }).session;
+        if (currentSession) {
+          delete currentSession[this.auth.sessionKey];
+          delete currentSession[`${this.auth.sessionKey}__tokens`];
+          delete currentSession[`${this.auth.sessionKey}__oauth`];
+          await saveSession(currentSession);
         }
 
         req.tendioUser = undefined;
@@ -344,6 +374,7 @@ export class TendioExpressAuth<TRoles extends string = string> {
         session![`${this.auth.sessionKey}__tokens`] = newTokens;
         req.tendioTokens = newTokens;
 
+        await saveSession(session!);
         next();
       } catch (err) {
         next(err);
@@ -408,9 +439,10 @@ export class TendioExpressAuth<TRoles extends string = string> {
         req.tendioUser = user as TendioUser;
         req.tendioTokens = tokens;
 
+        await saveSession(session);
         next();
       } catch (err) {
-        if (err instanceof TendioAuthError) {
+        if (err instanceof TendioAuthError && err.code !== 'session_error') {
           const status = err.statusCode || 401;
           res.status(status).json({ error: err.message, code: err.code });
           return;
