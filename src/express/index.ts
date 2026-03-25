@@ -7,6 +7,7 @@ export {
   generateCodeChallenge,
   generateState,
   TendioAuthError,
+  parseEnvironment,
 } from '../index.js';
 
 export type {

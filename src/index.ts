@@ -33,3 +33,8 @@ export type {
 } from './types.js';
 
 export { TendioAuthError } from './types.js';
+
+export function parseEnvironment(val?: string): 'development' | 'staging' | 'production' {
+  if (val === 'development' || val === 'staging' || val === 'production') return val;
+  return 'production';
+}

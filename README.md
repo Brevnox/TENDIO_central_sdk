@@ -190,7 +190,7 @@ Your sessions table needs columns: `sid` (VARCHAR primary key), `sess` (JSONB), 
 Create an `auth.ts` file:
 
 ```typescript
-import { TendioAuth } from '@justinmcadoo/tendiocentral-sdk/express';
+import { TendioAuth, parseEnvironment } from '@justinmcadoo/tendiocentral-sdk/express';
 import type { TendioUser, TendioWebhookEvent } from '@justinmcadoo/tendiocentral-sdk';
 import { Router, Request, Response, NextFunction } from 'express';
 import express from 'express';
@@ -204,7 +204,7 @@ export async function initializeAuth() {
     clientSecret: process.env.TENDIOCENTRAL_CLIENT_SECRET!,
     redirectUri: process.env.TENDIOCENTRAL_REDIRECT_URI!,
     webhookSecret: process.env.TENDIOCENTRAL_WEBHOOK_SECRET,
-    environment: (process.env.ENVIRONMENT as any) || 'development',
+    environment: parseEnvironment(process.env.ENVIRONMENT),
 
     // Auto-registration (see Section 5a)
     autoRegisterUris: true,
