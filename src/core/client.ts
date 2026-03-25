@@ -44,7 +44,7 @@ function resolveTendioCentralUrl(configUrl?: string): string {
   if (resolved) return resolved;
 
   throw new TendioAuthError(
-    'config_fetch_failed',
+    'invalid_config',
     `Cannot resolve TendioCentral URL. Set NODE_ENV to one of: ${Object.keys(TENDIOCENTRAL_URL_MAP).join(', ')} — or set TENDIOCENTRAL_URL explicitly, or pass tendiocentralUrl in the config.`,
   );
 }
