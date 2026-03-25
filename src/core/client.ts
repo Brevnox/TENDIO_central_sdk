@@ -27,6 +27,28 @@ const DEFAULT_TOKENS_KEY = 'tendioTokens';
 const DEFAULT_OAUTH_KEY = 'tendioOAuth';
 const TOKEN_REFRESH_BUFFER_SECONDS = 300;
 
+const TENDIOCENTRAL_URL_MAP: Record<string, string> = {
+  production: 'https://central.mytendio2.com',
+  development: 'https://1813f723-8ddd-4a26-b9c2-03890a369536-00-1ckwztzcpetnb.spock.replit.dev',
+  staging: 'https://1813f723-8ddd-4a26-b9c2-03890a369536-00-1ckwztzcpetnb.spock.replit.dev',
+};
+
+function resolveTendioCentralUrl(configUrl?: string): string {
+  if (configUrl) return configUrl;
+
+  const envUrl = process.env.TENDIOCENTRAL_URL;
+  if (envUrl) return envUrl;
+
+  const nodeEnv = (process.env.NODE_ENV || '').toLowerCase();
+  const resolved = TENDIOCENTRAL_URL_MAP[nodeEnv];
+  if (resolved) return resolved;
+
+  throw new TendioAuthError(
+    'config_fetch_failed',
+    `Cannot resolve TendioCentral URL. Set NODE_ENV to one of: ${Object.keys(TENDIOCENTRAL_URL_MAP).join(', ')} — or set TENDIOCENTRAL_URL explicitly, or pass tendiocentralUrl in the config.`,
+  );
+}
+
 const defaultLogger: TendioLogger = {
   info: (msg: string, meta?: object) => console.log(msg, meta ?? ''),
   error: (msg: string, meta?: object) => console.error(msg, meta ?? ''),
@@ -62,7 +84,7 @@ export class TendioAuth<TRoles extends string = string> {
     this.clientId = config.clientId || process.env.TENDIOCENTRAL_CLIENT_ID || '';
     this.clientSecret = config.clientSecret;
     this.redirectUri = config.redirectUri;
-    this.baseUrl = config.tendiocentralUrl || process.env.TENDIOCENTRAL_URL || '';
+    this.baseUrl = resolveTendioCentralUrl(config.tendiocentralUrl);
     this.webhookSecret = config.webhookSecret || process.env.TENDIOCENTRAL_WEBHOOK_SECRET;
     this.scopes = config.scopes || DEFAULT_SCOPES;
     this.sessionKey = config.sessionKey || DEFAULT_SESSION_KEY;
@@ -79,7 +101,6 @@ export class TendioAuth<TRoles extends string = string> {
     if (!this.clientId) throw new Error('clientId is required');
     if (!this.clientSecret) throw new Error('clientSecret is required');
     if (!this.redirectUri) throw new Error('redirectUri is required');
-    if (!this.baseUrl) throw new Error('tendiocentralUrl is required (or set TENDIOCENTRAL_URL env var)');
   }
 
   static async fromConfig<TRoles extends string = string>(

@@ -22,15 +22,23 @@ Set the following environment variables in your application:
 |---|---|---|---|
 | `TENDIOCENTRAL_CLIENT_ID` | Yes | Yes | Your app's client ID |
 | `TENDIOCENTRAL_CLIENT_SECRET` | Yes | No | Your app's client secret — must be passed as `clientSecret` in config |
-| `TENDIOCENTRAL_URL` | Yes | Yes | TendioCentral server URL |
+| `TENDIOCENTRAL_URL` | No | Yes | TendioCentral server URL — only needed if pointing at a custom instance (see auto-resolution below) |
 | `TENDIOCENTRAL_REDIRECT_URI` | Yes | No | The OAuth callback URL — must be passed as `redirectUri` in config |
 | `TENDIOCENTRAL_WEBHOOK_SECRET` | No | Yes | Secret for verifying webhook payloads |
 | `ENVIRONMENT` | No | No | `development`, `staging`, or `production` (defaults to `production`) — pass as `environment` in config |
+| `NODE_ENV` | No | Yes | Used to auto-resolve the TendioCentral URL (see below) |
 | `SESSION_SECRET` | Yes | No | Secret for express-session (not SDK-related, used by your session middleware) |
 
-**Auto-read variables:** `TENDIOCENTRAL_CLIENT_ID`, `TENDIOCENTRAL_URL`, and `TENDIOCENTRAL_WEBHOOK_SECRET` are automatically read from `process.env` by the SDK — you do not need to pass them in the config object (though you can override them if needed).
+**Auto-read variables:** `TENDIOCENTRAL_CLIENT_ID`, `TENDIOCENTRAL_WEBHOOK_SECRET`, and `NODE_ENV` are automatically read from `process.env` by the SDK.
 
 **Manually passed variables:** `TENDIOCENTRAL_CLIENT_SECRET` and `TENDIOCENTRAL_REDIRECT_URI` must be read from `process.env` by your code and passed explicitly in the config as `clientSecret` and `redirectUri`.
+
+**TendioCentral URL auto-resolution:** The SDK automatically resolves the TendioCentral server URL based on `NODE_ENV`, so most developers do not need to set `TENDIOCENTRAL_URL` at all. The resolution priority is:
+
+1. Explicit `tendiocentralUrl` passed in the config object — always wins
+2. `TENDIOCENTRAL_URL` environment variable — for custom instances or overrides
+3. Auto-resolved from `NODE_ENV`: `production` → `https://central.mytendio2.com`, `development` and `staging` → the Tendio dev server
+4. If none of the above resolve, the SDK throws a clear error
 
 ---
 
@@ -100,7 +108,7 @@ let authInstance: Awaited<ReturnType<typeof TendioAuth.fromConfig>>;
 export async function initializeAuth() {
   authInstance = await TendioAuth.fromConfig({
     // clientId is auto-read from TENDIOCENTRAL_CLIENT_ID env var
-    // tendiocentralUrl is auto-read from TENDIOCENTRAL_URL env var
+    // tendiocentralUrl is auto-resolved from NODE_ENV (no config needed)
     clientSecret: process.env.TENDIOCENTRAL_CLIENT_SECRET!,
     redirectUri: process.env.TENDIOCENTRAL_REDIRECT_URI!,
     webhookSecret: process.env.TENDIOCENTRAL_WEBHOOK_SECRET,
@@ -632,7 +640,7 @@ Your sessions table needs:
 | `clientId` | string | No | App client ID (auto-read from `TENDIOCENTRAL_CLIENT_ID` env var) |
 | `clientSecret` | string | Yes | App client secret |
 | `redirectUri` | string | Yes | Full absolute OAuth callback URL |
-| `tendiocentralUrl` | string | No | TendioCentral server URL (auto-read from `TENDIOCENTRAL_URL` env var) |
+| `tendiocentralUrl` | string | No | TendioCentral server URL. Auto-resolved from `NODE_ENV` (`production`, `development`, `staging`). Only needed to override the default or point at a custom instance. Falls back to `TENDIOCENTRAL_URL` env var. |
 | `environment` | string | No | `'development'`, `'staging'`, or `'production'` (defaults to `'production'`) |
 | `webhookSecret` | string | No | Secret for verifying webhook payloads (auto-read from `TENDIOCENTRAL_WEBHOOK_SECRET` env var) |
 | `webhookUrl` | string | No | Webhook endpoint URL (used for auto-registration) |
