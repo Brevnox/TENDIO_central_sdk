@@ -51,7 +51,10 @@ export function getAuth() {
 
 **Step 4: Mount the routes and start the app**
 
-Three routes handle the entire login flow: one to send users to TendioCentral to log in, one to receive them back after login (the "callback"), and one to log them out. Add `SESSION_SECRET` to your `.env` — generate one with: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+Three routes handle the entire login flow: one to send users to TendioCentral to log in, one to receive them back after login (the "callback"), and one to log them out.
+
+Add `SESSION_SECRET` to your `.env` — generate one by running this in your terminal:
+`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
 
 ```typescript
 import express from 'express';
