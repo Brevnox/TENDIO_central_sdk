@@ -104,6 +104,13 @@ window.location.href = '/login';
 npm install @justinmcadoo/tendiocentral-sdk
 ```
 
+The SDK has two import paths depending on your use case:
+
+- `@justinmcadoo/tendiocentral-sdk/express` — use this in most cases. It includes the Express middleware (initiateLogin, handleCallback, logout, etc.) and everything from the core path.
+- `@justinmcadoo/tendiocentral-sdk` — use this if you are not using Express and need only the core auth logic, types, and webhook verification.
+
+If you are building an Express app, import from the `/express` path.
+
 ---
 
 ## 2. Environment Variables
