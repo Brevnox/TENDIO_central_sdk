@@ -6,6 +6,95 @@
 
 ---
 
+## Quick Start
+
+Get a working login flow in 5 steps. This covers only the basics — see the detailed sections below for webhooks, role guards, and more.
+
+**Step 1: Install the package**
+
+```bash
+npm install @justinmcadoo/tendiocentral-sdk
+```
+
+**Step 2: Set environment variables**
+
+You only need three variables to get started. The SDK figures out the TendioCentral server URL automatically based on `NODE_ENV`, so you don't need to configure it.
+
+```env
+NODE_ENV=development
+TENDIOCENTRAL_CLIENT_ID=your-client-id
+TENDIOCENTRAL_CLIENT_SECRET=your-client-secret
+```
+
+**Step 3: Initialize the SDK**
+
+Create an `auth.ts` file that sets up the SDK with your credentials and the URL where TendioCentral will send users back after they log in.
+
+```typescript
+import { TendioAuth } from '@justinmcadoo/tendiocentral-sdk/express';
+
+let auth: Awaited<ReturnType<typeof TendioAuth.fromConfig>>;
+
+export async function initializeAuth() {
+  auth = await TendioAuth.fromConfig({
+    clientSecret: process.env.TENDIOCENTRAL_CLIENT_SECRET!,
+    redirectUri: 'https://your-app.com/auth/callback',
+  });
+  return auth;
+}
+
+export function getAuth() {
+  if (!auth) throw new Error('Auth not initialized');
+  return auth;
+}
+```
+
+**Step 4: Mount the routes and start the app**
+
+Three routes handle the entire login flow: one to send users to TendioCentral to log in, one to receive them back after login (the "callback"), and one to log them out. Add `SESSION_SECRET` to your `.env` — generate one with: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+
+```typescript
+import express from 'express';
+import session from 'express-session';
+import { initializeAuth, getAuth } from './auth';
+
+const app = express();
+
+app.use(session({
+  secret: process.env.SESSION_SECRET!,
+  resave: false,
+  saveUninitialized: false,
+}));
+
+app.get('/login', (req, res, next) => getAuth().initiateLogin()(req, res, next));
+
+app.get('/auth/callback', (req, res, next) => {
+  getAuth().handleCallback()(req, res, (err) => {
+    if (err) return res.redirect('/?error=login_failed');
+    res.redirect('/');
+  });
+});
+
+app.post('/logout', (req, res, next) => getAuth().logout()(req, res, next));
+
+async function main() {
+  await initializeAuth();
+  app.listen(3000, () => console.log('Running on http://localhost:3000'));
+}
+
+main();
+```
+
+**Step 5: Trigger login from your frontend**
+
+```typescript
+window.location.href = '/login';
+```
+
+**What's next?** This gets you a working login. For webhook handling, role-based access control, automatic token refresh, user sync, and lifecycle hooks (like linking SSO users to existing accounts), see the detailed sections below.
+
+---
+
 ## 1. Installation
 
 ```bash
