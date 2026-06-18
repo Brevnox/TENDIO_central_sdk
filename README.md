@@ -1,7 +1,7 @@
 # TendioCentral SDK Integration Guide
 
 **Package:** `@justinmcadoo/tendiocentral-sdk`
-**Current Version:** 1.1.0
+**Current Version:** 1.1.1
 **Requires:** Node.js 18+, Express 4.x or 5.x, express-session
 
 ---
