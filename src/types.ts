@@ -30,7 +30,70 @@ export interface TendioAuthConfig<TRoles extends string = string> {
     linkSsoId: boolean;
   } | null>;
   allowCredentialsLogin?: boolean;
+  /**
+   * Master switch for auto-provisioning the app's roles and access-granting
+   * role mappings on startup via `POST /api/apps/register-roles`. Defaults to
+   * `false`. When `true`, at least one of `roles` / `roleMappings` must be
+   * non-empty. Gated server-side by the same "Allow Auto-Registration" toggle
+   * as URI registration. Failure is non-fatal (logged, not thrown).
+   */
+  autoRegisterRoles?: boolean;
+  /**
+   * The app's own role catalog to upsert (e.g. `operator`, `viewer`). These are
+   * the consumer-supplied *input* definitions — distinct from the server-returned
+   * {@link AppRole} (which also carries an `id`).
+   */
+  roles?: AppRoleDefinition[];
+  /**
+   * Mappings from TendioCentral's 14 Tendio roles onto this app's roles. At
+   * least one mapping with `grantsAccess: true` is required before any user can
+   * authorize into the app. `grantsAccess` defaults to `false` if omitted.
+   */
+  roleMappings?: AppRoleMapping<TRoles>[];
   logger?: TendioLogger;
+}
+
+/**
+ * Consumer-supplied *input* definition of an application role, passed via
+ * {@link TendioAuthConfig.roles} for auto-registration.
+ *
+ * NOTE: this is the input shape and is intentionally distinct from
+ * {@link AppRole}, which is the *server-returned* shape (it additionally carries
+ * a server-assigned `id` and a required `isDefault`).
+ */
+export interface AppRoleDefinition {
+  name: string;
+  description?: string;
+  isDefault?: boolean;
+}
+
+/**
+ * Maps one of TendioCentral's Tendio role names onto an app role for
+ * auto-registration via {@link TendioAuthConfig.roleMappings}.
+ */
+export interface AppRoleMapping<TRoles extends string = string> {
+  /** One of TendioCentral's 14 Tendio role names (matched case-insensitively). */
+  tendioRole: string;
+  /** Must match one of {@link TendioAuthConfig.roles}[].name. */
+  appRole: TRoles;
+  /** Whether this mapping grants access to the app. Defaults to `false`. */
+  grantsAccess?: boolean;
+}
+
+/**
+ * Result returned by `POST /api/apps/register-roles` (the role auto-registration
+ * endpoint). Returned by {@link registerRoles}.
+ */
+export interface RegisterRolesResult {
+  appId: string;
+  appName: string;
+  rolesCreated: string[];
+  rolesExisting: string[];
+  mappingsCreated: string[];
+  mappingsUpdated: string[];
+  mappingsSkipped: Array<{ tendioRole: string; reason: string }>;
+  roles: AppRole[];
+  mappings: Array<{ tendioRole: string; appRole: string; grantsAccess: boolean }>;
 }
 
 export interface TendioLogger {
@@ -266,6 +329,7 @@ export type TendioAuthErrorCode =
   | 'caregivers_not_allowed'
   | 'credentials_login_disabled'
   | 'uri_registration_failed'
+  | 'role_registration_failed'
   | 'session_error'
   | 'invalid_config';
 

@@ -11,6 +11,9 @@ export type {
   TendioTokenSet,
   AppConfig,
   AppRole,
+  AppRoleDefinition,
+  AppRoleMapping,
+  RegisterRolesResult,
   TendioLogger,
 
   TendioWebhookEvent,

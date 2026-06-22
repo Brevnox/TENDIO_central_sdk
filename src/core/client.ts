@@ -8,9 +8,11 @@ import type {
   TendioLogger,
   AppConfig,
   AppRole,
+  AppRoleDefinition,
+  AppRoleMapping,
 } from '../types.js';
 import { TendioAuthError } from '../types.js';
-import { fetchAppConfig, registerUris, validateRedirectUri, validateRoles } from './config.js';
+import { fetchAppConfig, registerUris, registerRoles, validateRedirectUri, validateRoles } from './config.js';
 import { initJWKS, verifyIdToken } from './jwks.js';
 import { exchangeCodeForTokens, exchangeCredentialsForTokens, refreshAccessToken, revokeToken } from './tokens.js';
 import { generateCodeVerifier, generateCodeChallenge, generateState } from './pkce.js';
@@ -69,6 +71,9 @@ export class TendioAuth<TRoles extends string = string> {
   readonly webhookUrl: string | undefined;
   readonly ssoLoginUrl: string | undefined;
   readonly autoRegisterUris: boolean;
+  readonly autoRegisterRoles: boolean;
+  readonly roles: AppRoleDefinition[] | undefined;
+  readonly roleMappings: AppRoleMapping<TRoles>[] | undefined;
   readonly allowCredentialsLogin: boolean;
   readonly onBeforeLogout?: (req: unknown, res: unknown) => Promise<void>;
   readonly onUserNotFound?: (user: TendioUser<TRoles>) => Promise<{
@@ -92,6 +97,9 @@ export class TendioAuth<TRoles extends string = string> {
     this.webhookUrl = config.webhookUrl;
     this.ssoLoginUrl = config.ssoLoginUrl;
     this.autoRegisterUris = config.autoRegisterUris === true;
+    this.autoRegisterRoles = config.autoRegisterRoles === true;
+    this.roles = config.roles;
+    this.roleMappings = config.roleMappings;
     this.logger = config.logger || defaultLogger;
     this.onUserAuthenticated = config.onUserAuthenticated;
     this.allowCredentialsLogin = config.allowCredentialsLogin === true;
@@ -101,6 +109,36 @@ export class TendioAuth<TRoles extends string = string> {
     if (!this.clientId) throw new Error('clientId is required');
     if (!this.clientSecret) throw new Error('clientSecret is required');
     if (!this.redirectUri) throw new Error('redirectUri is required');
+
+    if (this.autoRegisterRoles) {
+      const hasRoles = (this.roles?.length ?? 0) > 0;
+      const hasMappings = (this.roleMappings?.length ?? 0) > 0;
+      if (!hasRoles && !hasMappings) {
+        throw new TendioAuthError(
+          'invalid_config',
+          'autoRegisterRoles is enabled but neither `roles` nor `roleMappings` was provided. Supply at least one.',
+        );
+      }
+      const defaultCount = (this.roles ?? []).filter(r => r.isDefault === true).length;
+      if (defaultCount > 1) {
+        throw new TendioAuthError(
+          'invalid_config',
+          `At most one role may be marked isDefault, but ${defaultCount} were. Mark only one default role.`,
+        );
+      }
+      if (hasRoles) {
+        const roleNames = new Set((this.roles ?? []).map(r => r.name.toLowerCase()));
+        for (const m of this.roleMappings ?? []) {
+          if (!roleNames.has(m.appRole.toLowerCase())) {
+            throw new TendioAuthError(
+              'invalid_config',
+              `roleMappings references appRole "${m.appRole}" which is not defined in \`roles\`. ` +
+              'Add it to `roles[]` or remove the mapping.',
+            );
+          }
+        }
+      }
+    }
   }
 
   static async fromConfig<TRoles extends string = string>(
@@ -170,6 +208,49 @@ export class TendioAuth<TRoles extends string = string> {
             'Register URIs manually in the TendioCentral dashboard.',
           );
         }
+      }
+    }
+
+    if (this.autoRegisterRoles && ((this.roles?.length ?? 0) > 0 || (this.roleMappings?.length ?? 0) > 0)) {
+      try {
+        this.logger.info('[TendioAuth] Auto-registering app roles and mappings with TendioCentral…');
+        const result = await registerRoles(
+          this.baseUrl,
+          this.clientId,
+          this.clientSecret,
+          this.environment,
+          {
+            roles: this.roles ?? [],
+            mappings: (this.roleMappings ?? []).map(m => ({
+              tendioRole: m.tendioRole,
+              appRole: m.appRole,
+              grantsAccess: m.grantsAccess ?? false,
+            })),
+          },
+          this.logger,
+        );
+        if (result) {
+          if (result.mappingsSkipped?.length) {
+            this.logger.warn(
+              '[TendioAuth] Some role mappings were skipped (unknown Tendio roles are not created by an app):',
+              { skipped: result.mappingsSkipped },
+            );
+          }
+          this.logger.info('[TendioAuth] Role auto-registration successful', {
+            rolesCreated: result.rolesCreated,
+            rolesExisting: result.rolesExisting,
+            mappingsCreated: result.mappingsCreated,
+            mappingsUpdated: result.mappingsUpdated,
+          });
+        }
+      } catch (err) {
+        // Non-fatal — unlike validateRedirectUri(), a failed/disabled role
+        // registration must not crash boot. A missing mapping only blocks user
+        // *access*, not startup. Surface it loudly; do not throw.
+        this.logger.warn(
+          `[TendioAuth] Role auto-registration failed (non-fatal): ${err instanceof Error ? err.message : String(err)}. ` +
+          'Users may be denied access until role mappings exist — configure them in the TendioCentral dashboard.',
+        );
       }
     }
 

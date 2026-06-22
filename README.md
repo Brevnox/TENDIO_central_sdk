@@ -1,7 +1,7 @@
 # TendioCentral SDK Integration Guide
 
 **Package:** `@justinmcadoo/tendiocentral-sdk`
-**Current Version:** 1.1.1
+**Current Version:** 1.2.0
 **Requires:** Node.js 18+, Express 4.x or 5.x, express-session
 
 ---
@@ -315,6 +315,83 @@ await TendioAuth.fromConfig({
 | 3 | Developer | Configures SDK with `redirectUri`, `ssoLoginUrl`, `webhookUrl`, `autoRegisterUris: true` |
 | 4 | SDK (auto) | On first startup: registers all URLs with TendioCentral |
 | 5 | Done | App is fully configured — admin can verify or modify in dashboard |
+
+---
+
+## 5b. Role & Mapping Auto-Registration
+
+In addition to URLs (5a), the SDK can auto-provision your app's **roles** and the
+**access-granting role mappings** on startup, removing the manual "Application Roles + Role
+Mappings" portal step. This is opt-in via `autoRegisterRoles: true` (defaults to `false`).
+
+### How it works
+
+When `autoRegisterRoles: true` and at least one of `roles` / `roleMappings` is provided, the SDK
+sends a single `POST /api/apps/register-roles` request during `init()` — placed **after** URI
+registration and **before** `validateRedirectUri()`. It uses the same HTTP Basic auth
+(`base64(clientId:clientSecret)`) and is gated by the **same** "Allow Auto-Registration" toggle as
+URI registration.
+
+The call is an **idempotent upsert**: roles are upserted by case-insensitive `name`, and mappings
+are created or updated for each `(tendioRole, app)` pair. Calling it on every boot is safe and
+self-healing. Unknown Tendio role names are **never created** — they are skipped and reported in
+`mappingsSkipped[]`.
+
+### Config fields
+
+| Field | Type | Notes |
+|---|---|---|
+| `autoRegisterRoles` | `boolean` (default `false`) | Master switch for the role/mapping call. |
+| `roles` | `AppRoleDefinition[]` | The app's role catalog: `{ name, description?, isDefault? }`. |
+| `roleMappings` | `AppRoleMapping[]` | `{ tendioRole, appRole, grantsAccess? }`; `grantsAccess` defaults `false`. |
+
+> **Input vs. server shape:** `AppRoleDefinition` (what you pass in `roles`) is the consumer
+> *input* type and is intentionally distinct from `AppRole`, the *server-returned* shape that also
+> carries a server-assigned `id`. Don't confuse the two.
+
+### Config-time validation (fail fast)
+
+The constructor throws `invalid_config` *before any network call* when:
+- `autoRegisterRoles` is `true` but neither `roles` nor `roleMappings` is provided.
+- More than one role is marked `isDefault: true`.
+- A `roleMappings[].appRole` doesn't match any `roles[].name` (only enforced when `roles` is
+  supplied — if you pass mappings only, relying on pre-existing app roles, this check is skipped
+  and the server reports any unknown app role).
+
+### Error handling — non-fatal
+
+Unlike the redirect-URI step (which gates startup via `validateRedirectUri()`), role registration
+is **non-fatal**:
+- A failed or disabled (`403 auto_registration_disabled`) role registration is **logged and
+  swallowed** — it never crashes boot.
+- The consequence of failure is that users may be denied access until mappings exist, so the
+  warning is surfaced loudly in the logs.
+
+### Example config
+
+```typescript
+type AppRole = 'operator' | 'viewer';
+
+await TendioAuth.fromConfig<AppRole>({
+  clientSecret: process.env.TENDIOCENTRAL_CLIENT_SECRET!,
+  redirectUri: 'https://myapp.com/auth/callback',
+  autoRegisterUris: true,
+  autoRegisterRoles: true,
+  roles: [
+    { name: 'operator', description: 'Standard operations user', isDefault: true },
+    { name: 'viewer', description: 'Read-only access' },
+  ],
+  roleMappings: [
+    { tendioRole: 'ADMIN', appRole: 'operator', grantsAccess: true },
+    { tendioRole: 'STAFF', appRole: 'operator', grantsAccess: true },
+    { tendioRole: 'OWNER', appRole: 'viewer', grantsAccess: true },
+  ],
+  environment: 'production',
+});
+```
+
+> `appRole` is typed against the SDK's `TRoles` generic, so `TendioAuth.fromConfig<AppRole>(...)`
+> gives you compile-time checking that every mapping's `appRole` is one of your declared roles.
 
 ---
 

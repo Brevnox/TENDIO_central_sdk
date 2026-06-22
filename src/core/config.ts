@@ -1,4 +1,4 @@
-import type { AppConfig, TendioLogger } from '../types.js';
+import type { AppConfig, TendioLogger, RegisterRolesResult } from '../types.js';
 import { TendioAuthError } from '../types.js';
 
 export async function fetchAppConfig(
@@ -120,6 +120,57 @@ export async function registerUris(
   }
 
   return await response.json() as AppConfig;
+}
+
+export async function registerRoles(
+  baseUrl: string,
+  clientId: string,
+  clientSecret: string,
+  environment: string,
+  options: {
+    roles?: Array<{ name: string; description?: string; isDefault?: boolean }>;
+    mappings?: Array<{ tendioRole: string; appRole: string; grantsAccess?: boolean }>;
+  },
+  logger?: TendioLogger,
+): Promise<RegisterRolesResult | null> {
+  const url = `${baseUrl}/api/apps/register-roles`;
+  const credentials = Buffer.from(`${clientId}:${clientSecret}`).toString('base64');
+
+  const body: Record<string, unknown> = { environment };
+  if (options.roles?.length) body.roles = options.roles;
+  if (options.mappings?.length) body.mappings = options.mappings;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${credentials}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (response.status === 403) {
+    const errBody = await response.json().catch(() => ({})) as Record<string, unknown>;
+    if (errBody.error === 'auto_registration_disabled') {
+      logger?.warn(
+        '[TendioAuth] Auto-registration is disabled for this application by an admin. ' +
+        'Register roles and mappings manually in the TendioCentral dashboard, or ask an admin to enable auto-registration.',
+      );
+      return null;
+    }
+  }
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new TendioAuthError(
+      'role_registration_failed',
+      `Role auto-registration failed: HTTP ${response.status}${text ? ` — ${text}` : ''}`,
+      { statusCode: response.status },
+    );
+  }
+
+  return await response.json() as RegisterRolesResult;
 }
 
 export function validateRedirectUri(redirectUri: string, registeredUris: string[]): void {
